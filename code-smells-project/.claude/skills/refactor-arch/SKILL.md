@@ -250,7 +250,7 @@ not one you have a template for:
 | File | Read it in | Contains |
 | --- | --- | --- |
 | `references/project-analysis.md` | Phase 1 | Language, framework, DB and architecture detection heuristics |
-| `references/antipattern-catalog.md` | Phase 2 | 22 anti-patterns with detection signals, severity rules, deprecated-API registry |
+| `references/antipattern-catalog.md` | Phase 2 | 23 anti-patterns with detection signals, severity rules, deprecated-API registry |
 | `references/audit-report-template.md` | Phase 2 | Exact report format and writing rules |
 | `references/mvc-guidelines.md` | Phase 3 | Target MVC layers, dependency rules, per-stack layouts |
-| `references/refactoring-playbook.md` | Phase 3 | 17 transformation patterns with before/after code |
+| `references/refactoring-playbook.md` | Phase 3 | 18 transformation patterns with before/after code |

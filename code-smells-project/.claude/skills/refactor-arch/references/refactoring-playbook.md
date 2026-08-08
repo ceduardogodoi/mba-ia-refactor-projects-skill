@@ -25,6 +25,7 @@ assumes the ones before it are done.
 | RP-15 | AP-17 | Structured Logging |
 | RP-16 | AP-19 | Named Constants |
 | RP-17 | AP-20, AP-21 | Rename & Remove Dead Code |
+| RP-18 | AP-23 | Harden Middleware Configuration |
 
 ---
 
@@ -832,6 +833,77 @@ def generate_id():             # nunca chamado → remover
   attack surface.
 - Verify before deleting: a "dead" function may be referenced dynamically (`getattr`, string dispatch,
   a route name). Grep the whole tree, including config and templates.
+
+---
+
+## RP-18 — Harden Middleware Configuration
+
+The wiring, not the code. These are one-line changes with outsized impact, and they belong in the
+composition root next to the rest of the configuration (RP-01).
+
+**Before**
+```python
+CORS(app)                                  # qualquer origem do mundo
+app.config["DEBUG"] = True                 # console interativo no traceback
+```
+```js
+app.use(cors());                           // Access-Control-Allow-Origin: *
+app.use(express.json());                   // body sem limite de tamanho
+```
+
+**After** — Flask
+```python
+CORS(
+    app,
+    origins=settings.cors_origins,                 # lista vinda da config
+    supports_credentials=settings.cors_credentials,
+)
+app.config.update(
+    DEBUG=settings.debug,                          # default false
+    MAX_CONTENT_LENGTH=settings.max_body_bytes,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+@app.after_request
+def _security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    return response
+```
+
+**After** — Express
+```js
+app.use(cors({ origin: config.corsOrigins, credentials: config.corsCredentials }));
+app.use(express.json({ limit: config.maxBodySize }));
+
+// helmet() cobre tudo isto, mas é dependência nova — só adicione se o projeto
+// já a tiver, ou se o finding não puder ser resolvido sem ela.
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+});
+```
+
+**Rules**
+- Origins come from config and **default to restrictive**. An allowlist that defaults to `*` is not an
+  allowlist.
+- Never combine a wildcard — or a reflected `Origin` — with `credentials: true`. Reflecting the request
+  origin is the wildcard with extra steps, and unlike the literal `*` it actually works with cookies.
+- Cookie flags are not optional: `Secure`, `HttpOnly`, `SameSite`. Without `HttpOnly`, every XSS is a
+  session theft.
+- `DEBUG` defaults to `false` and comes from config. Flask's debug console is remote code execution
+  reachable from any unhandled exception.
+- Header middleware is registered **before** the routes; the error middleware stays last.
+- Prefer the framework's own knobs and the stdlib over a new dependency, per the skill's ground rules.
+- Verify with the wire, not the source: `curl -I` the running app and read the headers back. A header
+  you believe is set and is not is worse than one you know is missing.
+- Changing CORS origins is a contract change for any browser client — list it under "Intentional
+  behaviour changes".
 
 ---
 

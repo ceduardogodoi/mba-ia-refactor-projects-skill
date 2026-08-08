@@ -7,6 +7,10 @@ code" is not a signal; *"SQL query built with `+` on a value coming from `reques
 also gives you a **not a finding when** clause — respect it, false positives destroy a report's
 credibility.
 
+`AP-xx` identifiers are stable: they are referenced by past reports and by the playbook, so they are
+never renumbered. The severity **sections** below are the ordering that matters; an entry added later
+keeps its number wherever it lands.
+
 ---
 
 ## Severity rules
@@ -470,6 +474,48 @@ duplicate business records.
 
 **Fix:** `RP-06` (extract to a service) plus explicit timeouts; queue it if the client does not need
 the result.
+
+---
+
+### AP-23 — Insecure Middleware & Framework Configuration
+
+**Definition:** A security control that the framework offers is disabled, wide open, or never
+configured. The code is fine; the way it is wired up is not.
+
+**Detection signals**
+- **CORS with no restriction:** `CORS(app)` with no `origins`, `cors()` with no options,
+  `origins=["*"]`, `origin: '*'`, `Access-Control-Allow-Origin: *`.
+- **CORS reflecting the request Origin** back into the response header with no allowlist — a wildcard
+  wearing a disguise, and it *does* work with credentials.
+- **Wildcard origin plus credentials:** `supports_credentials=True` / `credentials: true` next to a
+  wildcard or reflected origin.
+- **Debug mode in what is presented as production:** `app.run(debug=True)`, `app.config['DEBUG']=True`,
+  Django `DEBUG = True`, `NODE_ENV` never set to `production`.
+- **Session cookies without flags:** `SESSION_COOKIE_SECURE` / `HTTPONLY` / `SAMESITE` unset,
+  `res.cookie(name, value)` with no options object, `session({ cookie: {} })`.
+- **No security headers:** no `helmet()`, no `flask-talisman`, no `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security` or `Content-Security-Policy` anywhere.
+- **Unbounded request body:** no `MAX_CONTENT_LENGTH`, `express.json()` with no `limit`.
+- **Host allowlist wide open:** `ALLOWED_HOSTS = ['*']`, `TRUSTED_HOSTS` unset behind a proxy.
+- **Binding to `0.0.0.0`** in a service with no authentication.
+- **TLS verification disabled:** `verify=False`, `rejectUnauthorized: false`,
+  `NODE_TLS_REJECT_UNAUTHORIZED=0`, `curl -k` in a deploy script.
+- **No rate limit on authentication endpoints** — `/login`, password reset, token issuance.
+
+**Not a finding when:** the permissive setting is scoped to a genuinely public, read-only,
+unauthenticated endpoint and is documented as deliberate. "A reverse proxy adds that header" is a
+mitigation only if you can point at the proxy config — an unverified claim is not evidence.
+
+**Impact:** A wildcard CORS lets any website in the world issue requests from a logged-in victim's
+browser *and read the responses*. Missing `HttpOnly` turns any XSS into session theft. Flask's debug
+mode serves an interactive Python console on the traceback page, which is remote code execution
+reachable from any unhandled exception.
+
+**Severity:** `MEDIUM` by default. Raise to `HIGH` when the API is authenticated or returns personal
+data, or when session cookies lack their flags. Raise to `CRITICAL` when it is a debug console
+exposed in production, or TLS verification disabled on a call that carries credentials.
+
+**Fix:** `RP-18`.
 
 ---
 

@@ -472,7 +472,7 @@ rate limit — um log de auditoria acidental que ninguém consegue consultar.
 
 ---
 
-### #16 [MEDIUM] Permissive CORS Configuration
+### #16 [MEDIUM] Insecure Middleware & Framework Configuration (AP-23)
 
 **File:** `app.py:9`
 
@@ -488,13 +488,14 @@ CORS(app)
 a resposta. Combinado com o finding #3, uma página maliciosa consegue extrair a lista de usuários com
 senhas via `fetch`.
 
-**Recommendation:** Restringir origens por configuração (`CORS(app, origins=settings.allowed_origins)`),
-com default restritivo. → `RP-01` (origens vêm da config)
+**Recommendation:** Restringir origens por configuração (`CORS(app, origins=settings.cors_origins)`),
+com default restritivo. → `RP-18`
 
-> **Nota de calibração da skill:** este finding não corresponde a nenhuma entrada do catálogo. É uma
-> lacuna real — misconfiguração de segurança em middleware não está coberta por AP-01..AP-22. Sugere-se
-> incluir uma entrada `AP-23 — Insecure Middleware Configuration` (CORS permissivo, headers de
-> segurança ausentes, cookies sem `Secure`/`HttpOnly`/`SameSite`) antes de rodar nos projetos 2 e 3.
+> **Nota de calibração da skill:** no momento em que este relatório foi gerado, o achado não
+> correspondia a nenhuma entrada do catálogo — foi identificado por julgamento, não por detection
+> signal. A lacuna foi fechada em seguida com a criação de `AP-23 — Insecure Middleware & Framework
+> Configuration` e `RP-18 — Harden Middleware Configuration`. A classificação acima já reflete o
+> catálogo atualizado. Ver "Observação sobre a skill" no fim deste relatório.
 
 ---
 
@@ -814,9 +815,38 @@ comportamento original, confirmando que a rota foi neutralizada por configuraç�
 O login com as credenciais de seed (`admin@loja.com` / `admin123`) continua retornando `200` com o
 mesmo payload, o que confirma que a troca de plaintext por hash preservou o fluxo de autenticação.
 
-### Observação sobre a skill
+### Observação sobre a skill — lacuna encontrada e fechada
 
-O finding #16 (CORS permissivo) não corresponde a nenhuma entrada do catálogo — foi identificado por
-julgamento, não por detection signal. É uma lacuna real: misconfiguração de segurança em middleware
-não está coberta por AP-01..AP-22. Recomenda-se adicionar `AP-23 — Insecure Middleware Configuration`
-antes de executar nos projetos 2 e 3, para que o achado venha do catálogo e não da sorte.
+Esta execução expôs um ponto cego do catálogo. O finding #16 (CORS permissivo) foi identificado por
+julgamento, não por detection signal: misconfiguração de segurança em middleware não estava coberta
+por AP-01..AP-22. Numa sessão limpa, sem esse julgamento, o achado provavelmente escaparia.
+
+A lacuna foi fechada antes de executar nos projetos 2 e 3:
+
+- **`AP-23 — Insecure Middleware & Framework Configuration`** (MEDIUM, escalando para HIGH/CRITICAL)
+  cobre CORS irrestrito ou refletido, wildcard combinado com credentials, debug mode em produção,
+  cookies de sessão sem `Secure`/`HttpOnly`/`SameSite`, ausência de security headers, body sem limite
+  de tamanho, host allowlist aberta, bind em `0.0.0.0` sem autenticação, verificação de TLS desligada
+  e ausência de rate limit em endpoints de autenticação.
+- **`RP-18 — Harden Middleware Configuration`** traz o antes/depois em Flask e Express, com a regra de
+  verificar pelo header na resposta (`curl -I`) e não pelo código — um header que se acredita estar
+  setado e não está é pior que um ausente.
+
+### Delta residual de AP-23 neste projeto
+
+O catálogo foi ampliado **depois** que a Fase 3 deste projeto rodou, e os sinais novos não foram
+aplicados retroativamente. Sobre a árvore refatorada, AP-23 hoje ainda apontaria:
+
+| Sinal | Estado |
+| --- | --- |
+| CORS com origem irrestrita | resolvido — origens vêm da config, default restritivo |
+| Debug mode ligado | resolvido — vem da config, default `false` |
+| Bind em `0.0.0.0` sem auth | resolvido — default `127.0.0.1` |
+| Cookies de sessão sem flags | não se aplica — a API não usa sessão nem cookie |
+| Security headers ausentes | **pendente** — não há `X-Content-Type-Options`, `X-Frame-Options` nem `Referrer-Policy` |
+| Body sem limite de tamanho | **pendente** — `MAX_CONTENT_LENGTH` não definido |
+| Rate limit em `/login` | **pendente** — ausente |
+
+Os três pendentes são de baixo risco de regressão e cabem em poucas linhas no composition root, mas
+exigiriam nova rodada de validação contra o baseline. Ficam registrados aqui como decisão consciente,
+não como omissão.
