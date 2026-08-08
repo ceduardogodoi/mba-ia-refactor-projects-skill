@@ -39,6 +39,13 @@ class Settings:
         self.log_level = env.get("LOG_LEVEL", "INFO").upper()
         self.cors_origins = self._list(env, "CORS_ORIGINS", default="http://localhost:3000")
 
+        # Sem limite, um corpo grande o bastante esgota a memória do processo.
+        self.max_content_length = int(env.get("MAX_CONTENT_LENGTH_BYTES", str(1024 * 1024)))
+
+        # Rate limit do /login: tentativas por janela, por IP de origem.
+        self.login_rate_limit = int(env.get("LOGIN_RATE_LIMIT", "5"))
+        self.login_rate_window = int(env.get("LOGIN_RATE_WINDOW_SECONDS", "60"))
+
         # Rotas administrativas executam SQL arbitrário e destroem dados.
         # Default negado: ligar exige decisão explícita de quem opera.
         self.admin_endpoints_enabled = self._flag(env, "ADMIN_ENDPOINTS_ENABLED", default=False)

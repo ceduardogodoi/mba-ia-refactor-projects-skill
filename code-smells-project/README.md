@@ -30,6 +30,9 @@ Toda configuração vem de variáveis de ambiente — nenhum valor sensível est
 - **`ADMIN_ENDPOINTS_ENABLED`** controla `POST /admin/query` e `POST /admin/reset-db`. O default é
   `false`, e nesse estado as duas rotas continuam existindo mas respondem `403`. Ligar significa expor
   execução de SQL arbitrário e destruição de dados.
+- **`LOGIN_RATE_LIMIT`** e **`LOGIN_RATE_WINDOW_SECONDS`** limitam `POST /login` a 5 tentativas por
+  minuto por IP. O contador vive em memória: com mais de um worker, cada um conta separadamente. Ver
+  as limitações em `src/middlewares/rate_limit.py`.
 
 ## Estrutura
 
@@ -94,6 +97,10 @@ A refatoração preservou o contrato, com estas exceções — cada uma exigida 
   allowlist de categoria), que antes faltavam no update.
 - Senhas passaram a ser gravadas com hash. As credenciais de seed continuam as mesmas; senhas
   gravadas antes da refatoração não autenticam mais.
+- Requisições com corpo acima de 1 MB respondem `413`.
+- `POST /login` responde `429` após 5 tentativas por minuto vindas do mesmo IP.
+- Todas as respostas incluem `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` e
+  `X-Permitted-Cross-Domain-Policies`.
 
 ## Pendências fora do escopo da refatoração
 

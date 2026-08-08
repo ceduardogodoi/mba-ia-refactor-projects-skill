@@ -15,7 +15,7 @@ from src.controllers.usuario_controller import UsuarioController
 from src.infra import database as db
 from src.infra.database import Database, get_connection
 from src.infra.schema import criar_schema, popular_se_vazio
-from src.middlewares import error_handler
+from src.middlewares import error_handler, rate_limit, security
 from src.middlewares.logging import build_logger
 from src.models.admin_model import AdminModel
 from src.models.pedido_model import PedidoModel
@@ -29,11 +29,13 @@ def create_app(settings):
     app = Flask(__name__)
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["DEBUG"] = settings.debug
+    app.config["MAX_CONTENT_LENGTH"] = settings.max_content_length
 
     logger = build_logger(settings)
 
     # Origens restritas por configuração — antes era CORS(app), que libera todas.
     CORS(app, origins=settings.cors_origins)
+    security.register(app)
 
     database = Database(settings.db_path)
     db.init_app(app, database)
@@ -56,6 +58,10 @@ def create_app(settings):
     )
     for blueprint in blueprints:
         app.register_blueprint(blueprint)
+
+    # Depois dos blueprints: o limiter identifica a rota por `request.endpoint`,
+    # que só existe depois que as rotas estão registradas.
+    rate_limit.register(app, settings, logger)
 
     error_handler.register(app, logger)
 

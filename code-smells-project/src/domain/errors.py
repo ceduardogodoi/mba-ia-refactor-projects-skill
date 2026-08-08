@@ -32,3 +32,7 @@ class ForbiddenError(DomainError):
 class ConflictError(DomainError):
     """Violação de regra de integridade — ex.: apagar registro ainda referenciado."""
     status = 409
+
+
+class TooManyRequestsError(DomainError):
+    status = 429

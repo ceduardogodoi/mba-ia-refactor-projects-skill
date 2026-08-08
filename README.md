@@ -22,7 +22,7 @@ Python/Flask e um Node.js/Express.
 | Severidade | 6C / 4H / 6M / 3L | 6C / 5H / 4M / 3L | 2C / 4H / 7M / 3L |
 | Endpoints | 19 | 3 | 22 |
 | Antes | 780 linhas / 4 arquivos | 180 linhas / 3 arquivos | 1.158 linhas / 15 arquivos |
-| Depois | 1.357 / 38 arquivos | 964 / 22 arquivos | 1.746 / 40 arquivos |
+| Depois | 1.469 / 40 arquivos | 964 / 22 arquivos | 1.746 / 40 arquivos |
 | Probes de validação | 38 (19 idênticos) | 10 + crash probe (2 idênticos) | 51 (42 idênticos) |
 | Relatório | [audit-project-1.md](reports/audit-project-1.md) | [audit-project-2.md](reports/audit-project-2.md) | [audit-project-3.md](reports/audit-project-3.md) |
 
@@ -196,9 +196,16 @@ no projeto 2 ela produziu finding direto dos sinais — `express.json()` sem `li
 bind em todas as interfaces.
 
 **Ampliar o catálogo criou dívida retroativa.** `AP-23` é mais largo que o achado que o motivou, e os
-sinais novos não foram aplicados ao projeto 1, que já tinha rodado. Três ficaram pendentes lá
-(security headers, `MAX_CONTENT_LENGTH`, rate limit em `/login`). Está registrado como tabela de delta
-residual no relatório — decisão consciente, não omissão.
+sinais novos não valiam para o projeto 1, que já tinha rodado — security headers, `MAX_CONTENT_LENGTH`
+e rate limit em `/login` ficaram descobertos. A dívida foi registrada como tabela de delta no relatório
+antes de ser paga, e depois quitada em passagem própria, com revalidação contra o mesmo baseline: os
+19/38 permaneceram idênticos e nenhuma regressão apareceu. É o custo previsível de iterar sobre um
+catálogo depois que ele já produziu relatório, e vale registrar que ele existe.
+
+O rate limiter foi escrito em memória em vez de trazer `Flask-Limiter`, seguindo a própria regra da
+skill de não adicionar dependência que um finding não exija. Isso impõe duas limitações reais — o
+contador não é compartilhado entre workers, e `remote_addr` atrás de proxy é o IP do proxy — ambas
+documentadas no módulo e no relatório em vez de escondidas atrás de um "resolvido".
 
 **Um finding meu estava errado.** No projeto 3 afirmei que apagar uma categoria deixava tasks órfãs. O
 baseline provou o contrário: o SQLAlchemy desassocia os filhos no nível do ORM. O que era verdade —
@@ -265,14 +272,14 @@ frentes, o que sugere que ele discrimina em vez de sempre confirmar:
 
 ### Antes e depois
 
-**`code-smells-project`** — 4 arquivos viram 38; o SQL sai de 18 concatenações para zero.
+**`code-smells-project`** — 4 arquivos viram 40; o SQL sai de 18 concatenações para zero.
 
 ```text
 antes                              depois
 app.py          88 linhas          src/{config,infra,models,controllers,
 controllers.py 292                      views,serializers,schemas,services,
 models.py      314                      middlewares}/ + app.py
-database.py     86                 38 arquivos, 1.357 linhas
+database.py     86                 40 arquivos, 1.469 linhas
 ```
 
 **`ecommerce-api-legacy`** — a God Class de 141 linhas vira 22 arquivos; cinco níveis de callback

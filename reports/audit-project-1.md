@@ -832,10 +832,11 @@ A lacuna foi fechada antes de executar nos projetos 2 e 3:
   verificar pelo header na resposta (`curl -I`) e não pelo código — um header que se acredita estar
   setado e não está é pior que um ausente.
 
-### Delta residual de AP-23 neste projeto
+### Delta de AP-23 neste projeto — fechado
 
-O catálogo foi ampliado **depois** que a Fase 3 deste projeto rodou, e os sinais novos não foram
-aplicados retroativamente. Sobre a árvore refatorada, AP-23 hoje ainda apontaria:
+O catálogo foi ampliado **depois** que a Fase 3 deste projeto rodou, e três sinais novos ficaram
+inicialmente sem cobertura. Foram aplicados em uma passagem posterior, com nova validação contra o
+mesmo baseline.
 
 | Sinal | Estado |
 | --- | --- |
@@ -843,10 +844,46 @@ aplicados retroativamente. Sobre a árvore refatorada, AP-23 hoje ainda apontari
 | Debug mode ligado | resolvido — vem da config, default `false` |
 | Bind em `0.0.0.0` sem auth | resolvido — default `127.0.0.1` |
 | Cookies de sessão sem flags | não se aplica — a API não usa sessão nem cookie |
-| Security headers ausentes | **pendente** — não há `X-Content-Type-Options`, `X-Frame-Options` nem `Referrer-Policy` |
-| Body sem limite de tamanho | **pendente** — `MAX_CONTENT_LENGTH` não definido |
-| Rate limit em `/login` | **pendente** — ausente |
+| Security headers ausentes | resolvido — `src/middlewares/security.py` |
+| Body sem limite de tamanho | resolvido — `MAX_CONTENT_LENGTH` vindo da config |
+| Rate limit em `/login` | resolvido — `src/middlewares/rate_limit.py` |
+| Verificação de TLS desligada | não se aplica — a aplicação não faz chamadas de saída |
 
-Os três pendentes são de baixo risco de regressão e cabem em poucas linhas no composition root, mas
-exigiriam nova rodada de validação contra o baseline. Ficam registrados aqui como decisão consciente,
-não como omissão.
+**Verificação, medida no wire e não no código:**
+
+```text
+$ curl -sD - -o /dev/null localhost:5000/produtos | grep -i "x-\|referrer"
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  X-Permitted-Cross-Domain-Policies: none
+
+corpo de 2 MB  -> HTTP 413        corpo normal -> HTTP 201
+
+/login, limite 5/60s por IP:
+  tentativas 1-5 -> HTTP 401  {"erro":"Email ou senha inválidos","sucesso":false}
+  tentativa    6 -> HTTP 429  {"erro":"Muitas tentativas. Tente novamente em 60 segundos.","sucesso":false}
+  tentativa    7 -> HTTP 429
+  GET /produtos  -> HTTP 200 (não limitado)
+```
+
+Revalidação contra o baseline de 38 probes: **19/38 idênticos e 19 alterados, exatamente como antes** —
+zero diferença em relação à refatoração anterior, ou seja, nenhuma regressão introduzida.
+
+**Limitações assumidas do rate limiter.** `Flask-Limiter` seria dependência nova, e a regra da skill é
+só adicionar dependência quando o finding não puder ser resolvido sem ela. A implementação é uma
+janela deslizante em memória, o que impõe duas restrições registradas no próprio módulo:
+
+1. O contador vive no processo. Com mais de um worker, cada um conta separadamente e o limite efetivo
+   passa a ser `limite × nº de workers`. Para valer em produção, precisa de contador compartilhado
+   (Redis) ou de aplicação na borda.
+2. A identidade do cliente é `request.remote_addr`. Atrás de proxy reverso isso é o IP do proxy, e
+   confiar em `X-Forwarded-For` sem validar a cadeia permitiria forjar a identidade — por isso o header
+   não é lido.
+
+**Mudanças de comportamento adicionais** (acrescentadas à lista da seção anterior):
+
+- Requisições com corpo acima de `MAX_CONTENT_LENGTH_BYTES` (default 1 MB) respondem `413`.
+- `POST /login` responde `429` após `LOGIN_RATE_LIMIT` tentativas (default 5) na janela de
+  `LOGIN_RATE_WINDOW_SECONDS` (default 60), por IP de origem.
+- Todas as respostas passam a incluir quatro security headers.
