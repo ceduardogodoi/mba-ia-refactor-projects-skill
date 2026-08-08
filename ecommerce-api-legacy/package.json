@@ -1,13 +1,13 @@
 {
-  "name": "desafio-arquitetura-ia-boilerplate",
+  "name": "ecommerce-api-legacy",
   "version": "1.0.0",
-  "description": "Boilerplate com código legado para refatoração",
-  "main": "src/app.js",
+  "description": "LMS API refatorada para MVC pela skill refactor-arch",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node src/app.js"
+    "start": "node src/server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6"
+    "express": "^4.22.1",
+    "sqlite3": "^5.1.7"
   }
 }
